@@ -13,15 +13,18 @@ Damit landen Hauptdomain, Admin-Host und spätere Tunnel-Subdomains auf derselbe
 
 ## Status
 
-Dieses Repo enthält jetzt:
+Dieses Repo enthält jetzt nur den Beam-Core:
 
 - `bkg-beam` als Client
 - `bkg-beam-server` als Control-/Tunnel-Server
 - `bkg-beam-router` als statischen TCP-Port-Router
-- `webui/admin` als Admin-Dashboard
-- `webui/users` als User-Dashboard
 - User-/Admin-API-Flächen für Lizenzen, API-Keys, Tunnels und Router-Mappings
 - Dockerfile und Docker Compose Stack
+
+Die WebUIs liegen absichtlich in eigenen Repos:
+
+- `bkgoder/admin.beam.eysho.info` für das Admin-Dashboard
+- `bkgoder/webui.beam.eysho.info` für das User-Dashboard
 
 Wichtig: Ein normaler SSH-Client sendet keine Subdomain als erste TCP-Zeile. Für rohes SSH ist deshalb aktuell statisches Port-Mapping der robuste Weg, zum Beispiel Public-Port `2222` auf Tunnel `22-me_up-22`.
 
@@ -30,8 +33,6 @@ Wichtig: Ein normaler SSH-Client sendet keine Subdomain als erste TCP-Zeile. Fü
 - `src/client` enthält den Tunnel-Client
 - `src/server` enthält den Beam-Control-Server plus Admin/User-API
 - `src/router` enthält den statischen TCP-Router
-- `webui/admin` enthält das Admin-Dashboard
-- `webui/users` enthält das User-Dashboard
 - `docker-compose.yml` startet Server und Router
 - `docs/deploy-compose.md` beschreibt den Compose-Betrieb
 
@@ -85,8 +86,8 @@ Basis-Endpunkte:
 User-Endpunkte:
 
 - `POST /api/users/api-keys`
-- `GET /api/users/:user_id/api-keys`
-- `GET /api/users/:user_id/tunnels`
+- `GET /api/users/{user_id}/api-keys`
+- `GET /api/users/{user_id}/tunnels`
 
 Admin-Endpunkte:
 
@@ -114,21 +115,15 @@ Beispiel: öffentlicher Port `2222` wird auf Tunnel `22-me_up-22` geroutet:
 
 Danach kann ein Client den öffentlichen Port ansprechen, während `bkg-beam-router` intern `CONNECT 22-me_up-22` an den Beam-Server sendet.
 
-## WebUI starten
+## WebUIs
 
 Admin-Dashboard:
 
-`cd webui/admin`
-
-`dx serve`
+`https://github.com/bkgoder/admin.beam.eysho.info`
 
 User-Dashboard:
 
-`cd webui/users`
-
-`dx serve`
-
-Die Dashboards liegen bewusst außerhalb des Root-Workspace-CI, weil Dioxus-Web-Builds Browser/WASM-Ziele verwenden.
+`https://github.com/bkgoder/webui.beam.eysho.info`
 
 ## Protokoll
 
@@ -162,15 +157,14 @@ Danach bridged der Server die Pending-Verbindung mit dem Worker. Der Client brid
 - Keine Heartbeats/Keepalive-Logik.
 - Keine Limits gegen Tunnel-Spam.
 - Host-/SNI-Routing für Subdomains ist noch nicht implementiert.
-- Dashboards haben erste Oberflächen und API-Zielpunkte, Live-Fetching kommt als nächster Schnitt.
 - Compose startet aktuell Server und einen statischen SSH-Router.
 - Kein systemd-Service.
 
 ## Nächste sinnvolle Schritte
 
-1. Live-Fetching in Admin/User-Dashboard gegen die neuen API-Flächen verdrahten.
-2. Persistenz für User, Lizenzen und API-Keys ergänzen.
-3. Auth-Token für `REGISTER`, `CONNECT`, `WORKER` und Admin/User-API einführen.
+1. Persistenz für User, Lizenzen und API-Keys ergänzen.
+2. Auth-Token für `REGISTER`, `CONNECT`, `WORKER` und Admin/User-API einführen.
+3. Live-Fetching in den externen Admin/User-WebUIs verdrahten.
 4. Host-/SNI-Router für `*.beam.eysho.info` ergänzen.
 5. Heartbeats und automatische Cleanup-Logik ergänzen.
 6. Integrationstest mit Echo-Server hinzufügen.
