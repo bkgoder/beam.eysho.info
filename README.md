@@ -20,6 +20,7 @@ Dieses Repo enthält jetzt:
 - `bkg-beam-router` als statischen TCP-Port-Router
 - eine erste Dioxus-Web-Admin-UI unter `src/admin-ui`
 - eine Admin-HTTP-API am Server
+- Dockerfile und Docker Compose Stack
 
 Wichtig: Ein normaler SSH-Client sendet keine Subdomain als erste TCP-Zeile. Für rohes SSH ist deshalb aktuell statisches Port-Mapping der robuste Weg, zum Beispiel Public-Port `2222` auf Tunnel `22-me_up-22`.
 
@@ -29,6 +30,28 @@ Wichtig: Ein normaler SSH-Client sendet keine Subdomain als erste TCP-Zeile. Fü
 - `src/server` enthält den Beam-Control-Server plus Admin-API
 - `src/router` enthält den statischen TCP-Router
 - `src/admin-ui` enthält das Dioxus-Web-Admin-Gerüst
+- `docker-compose.yml` startet Server und Router
+- `docs/deploy-compose.md` beschreibt den Compose-Betrieb
+
+## Docker Compose starten
+
+`.env.example` nach `.env` kopieren und bei Bedarf anpassen.
+
+`docker compose up -d --build`
+
+Status prüfen:
+
+`docker compose ps`
+
+Logs prüfen:
+
+`docker compose logs -f beam-server`
+
+`docker compose logs -f beam-router-ssh`
+
+Healthcheck:
+
+`curl http://127.0.0.1:8081/health`
 
 ## Bauen
 
@@ -119,7 +142,8 @@ Danach bridged der Server die Pending-Verbindung mit dem Worker. Der Client brid
 - Keine Limits gegen Tunnel-Spam.
 - Host-/SNI-Routing für Subdomains ist noch nicht implementiert.
 - Admin-UI hat aktuell noch statische Beispielwerte.
-- Kein systemd-Service, kein Deployment-Packaging.
+- Compose startet aktuell Server und einen statischen SSH-Router.
+- Kein systemd-Service.
 
 ## Nächste sinnvolle Schritte
 
