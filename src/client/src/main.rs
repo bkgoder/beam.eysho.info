@@ -1,178 +1,140 @@
 use clap::Parser;
 use log::{error, info};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpListener, TcpStream};
+use tokio::io::{copy_bidirectional, AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::net::TcpStream;
 
-/// bkg-beam - Expose local services via beam.eysho.info
-/// 
-/// Usage: bkg-beam <local_port>:me up:<remote_port>
-/// Example: bkg-beam 22:me up:22
-/// This exposes local port 22 as 22-me.up-22.beam.eysho.info
+/// bkg-beam - expose a local TCP service through a beam server.
+///
+/// Usage:
+///   bkg-beam <local_port>:me up:<remote_port> --server beam.eysho.info --server-port 8080
+///
+/// Example:
+///   bkg-beam 22:me up:22
 #[derive(Parser, Debug)]
 #[command(name = "bkg-beam")]
 #[command(author = "bkg")]
 #[command(version = "0.1.0")]
 struct Args {
-    /// Local port with :me suffix (e.g., 22:me)
+    /// Local port with optional :me suffix, for example 22:me.
     #[arg(value_parser = parse_me_port)]
     me: u16,
 
-    /// Remote port with up: prefix (e.g., up:22)
+    /// Public/remote port with optional up: prefix, for example up:22.
     #[arg(value_parser = parse_up_port)]
     up: u16,
 
-    /// Server domain (default: beam.eysho.info)
+    /// Beam server domain.
     #[arg(short, long, default_value = "beam.eysho.info")]
     server: String,
+
+    /// Beam control/data port.
+    #[arg(long, default_value_t = 8080)]
+    server_port: u16,
+
+    /// Local host to connect to when the server opens a tunnel connection.
+    #[arg(long, default_value = "127.0.0.1")]
+    local_host: String,
 }
 
 fn parse_me_port(s: &str) -> Result<u16, String> {
     let s = s.trim();
-    if s.ends_with(":me") {
-        s[..s.len()-3].parse().map_err(|_| format!("Invalid port in '{}'", s))
+    if let Some(port) = s.strip_suffix(":me") {
+        port.parse().map_err(|_| format!("Invalid port in '{s}'"))
     } else {
-        s.parse().map_err(|_| format!("Invalid port in '{}'", s))
+        s.parse().map_err(|_| format!("Invalid port in '{s}'"))
     }
 }
 
 fn parse_up_port(s: &str) -> Result<u16, String> {
     let s = s.trim();
-    if s.starts_with("up:") {
-        s[3..].parse().map_err(|_| format!("Invalid port in '{}'", s))
+    if let Some(port) = s.strip_prefix("up:") {
+        port.parse().map_err(|_| format!("Invalid port in '{s}'"))
     } else {
-        s.parse().map_err(|_| format!("Invalid port in '{}'", s))
+        s.parse().map_err(|_| format!("Invalid port in '{s}'"))
     }
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
 
     let args = Args::parse();
-
     let local_port = args.me;
     let remote_port = args.up;
-    let server_addr = format!("{}:{}", args.server, remote_port);
-    let local_addr = format!("0.0.0.0:{}", local_port);
+    let server_addr = format!("{}:{}", args.server, args.server_port);
+    let local_addr = format!("{}:{}", args.local_host, local_port);
+    let tunnel_id = format!("{}-me_up-{}", local_port, remote_port);
     let tunnel_url = format!("{}-me.up-{}.{}", local_port, remote_port, args.server);
 
-    info!("Beam Tunnel");
-    info!("  Local port:   {}", local_port);
-    info!("  Server:       {}:{}", args.server, remote_port);
+    info!("Beam tunnel");
+    info!("  Local target: {}", local_addr);
+    info!("  Beam server:  {}", server_addr);
+    info!("  Tunnel id:    {}", tunnel_id);
     info!("  Tunnel URL:   {}", tunnel_url);
-    info!("Press Ctrl+C to stop");
 
-    // Start listening on local port
-    let listener = TcpListener::bind(&local_addr)
-        .await
-        .expect("Failed to bind local port");
+    let mut control = TcpStream::connect(&server_addr).await?;
+    control
+        .write_all(format!("REGISTER {tunnel_id}\n").as_bytes())
+        .await?;
 
-    info!("Listening on {} for incoming connections", local_addr);
+    let mut control = BufReader::new(control);
+    let mut response = String::new();
+    control.read_line(&mut response).await?;
 
-    // Create tunnel identifier: me-port_up-port
-    let tunnel_id = format!("{}-me_up-{}", local_port, remote_port);
+    if response.trim() != "OK" {
+        error!("Server rejected tunnel registration: {}", response.trim());
+        return Ok(());
+    }
 
-    // Connect to server
-    match TcpStream::connect(&server_addr).await {
-        Ok(mut server_stream) => {
-            info!("Connected to server");
+    info!("Tunnel active. Waiting for server-side connections.");
 
-            // Send tunnel identifier
-            server_stream
-                .write_all(tunnel_id.as_bytes())
-                .await
-                .expect("Failed to send tunnel id");
-            server_stream
-                .write_all(b"\n")
-                .await
-                .expect("Failed to send newline");
-
-            // Read response
-            let mut buf = [0u8; 1024];
-            let n = server_stream
-                .read(&mut buf)
-                .await
-                .expect("Failed to read response");
-            let response = String::from_utf8_lossy(&buf[..n]);
-
-            if !response.trim().eq("OK") {
-                error!("Server rejected tunnel: {}", response);
-                return;
-            }
-
-            info!("Tunnel active! Access your service at {}", tunnel_url);
-
-            // Accept connections on local port
-            loop {
-                match listener.accept().await {
-                    Ok((local_stream, peer_addr)) => {
-                        info!("Connection from {}", peer_addr);
-
-                        // For each new local connection, create a new server connection
-                        match TcpStream::connect(&server_addr).await {
-                            Ok(mut server_clone) => {
-                                // Send tunnel identifier again
-                                server_clone
-                                    .write_all(tunnel_id.as_bytes())
-                                    .await
-                                    .unwrap_or_else(|e| error!("Write error: {}", e));
-                                server_clone
-                                    .write_all(b"\n")
-                                    .await
-                                    .unwrap_or_else(|e| error!("Write error: {}", e));
-
-                                // Read OK response
-                                let mut buf2 = [0u8; 1024];
-                                let _ = server_clone.read(&mut buf2).await;
-
-                                tokio::spawn(async move {
-                                    if let Err(e) = forward_bidirectional(local_stream, server_clone).await {
-                                        error!("Forward error: {}", e);
-                                    }
-                                });
-                            }
-                            Err(e) => {
-                                error!("Failed to connect to server: {}", e);
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        error!("Accept error: {}", e);
-                    }
-                }
-            }
+    loop {
+        let mut line = String::new();
+        let read = control.read_line(&mut line).await?;
+        if read == 0 {
+            error!("Control connection closed by server");
+            return Ok(());
         }
-        Err(e) => {
-            error!("Failed to connect to server: {}", e);
+
+        match line.trim() {
+            "CONNECT" => {
+                let server_addr = server_addr.clone();
+                let local_addr = local_addr.clone();
+                let tunnel_id = tunnel_id.clone();
+
+                tokio::spawn(async move {
+                    if let Err(err) = open_worker(server_addr, local_addr, tunnel_id).await {
+                        error!("Worker connection failed: {err}");
+                    }
+                });
+            }
+            other if other.is_empty() => {}
+            other => error!("Unknown control message from server: {other}"),
         }
     }
 }
 
-async fn forward_bidirectional(
-    mut from: TcpStream,
-    mut to: TcpStream,
+async fn open_worker(
+    server_addr: String,
+    local_addr: String,
+    tunnel_id: String,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let (mut from_reader, mut from_writer) = tokio::io::split(from);
-    let (mut to_reader, mut to_writer) = tokio::io::split(to);
+    let mut local_stream = TcpStream::connect(&local_addr).await?;
+    let mut worker_stream = TcpStream::connect(&server_addr).await?;
 
-    // Forward from -> to
-    let from_to = tokio::io::copy(&mut from_reader, &mut to_writer);
-    
-    // Forward to -> from
-    let to_from = tokio::io::copy(&mut to_reader, &mut from_writer);
+    worker_stream
+        .write_all(format!("WORKER {tunnel_id}\n").as_bytes())
+        .await?;
 
-    tokio::select! {
-        res = from_to => {
-            if let Err(e) = res {
-                return Err(Box::new(e));
-            }
-        }
-        res = to_from => {
-            if let Err(e) = res {
-                return Err(Box::new(e));
-            }
-        }
+    let mut reader = BufReader::new(worker_stream);
+    let mut response = String::new();
+    reader.read_line(&mut response).await?;
+
+    if response.trim() != "OK" {
+        return Err(format!("server rejected worker: {}", response.trim()).into());
     }
 
+    let mut worker_stream = reader.into_inner();
+    copy_bidirectional(&mut worker_stream, &mut local_stream).await?;
     Ok(())
 }
