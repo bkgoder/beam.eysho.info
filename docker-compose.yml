@@ -1,0 +1,43 @@
+services:
+  beam-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: bkg-beam:local
+    container_name: beam-server
+    restart: unless-stopped
+    command:
+      - bkg-beam-server
+      - --domain
+      - ${BEAM_DOMAIN:-beam.eysho.info}
+      - --port
+      - ${BEAM_CONTROL_PORT:-8080}
+      - --admin-port
+      - ${BEAM_ADMIN_PORT:-8081}
+    ports:
+      - "${BEAM_CONTROL_BIND:-8080}:8080"
+      - "${BEAM_ADMIN_BIND:-8081}:8081"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8081/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  beam-router-ssh:
+    image: bkg-beam:local
+    container_name: beam-router-ssh
+    restart: unless-stopped
+    depends_on:
+      beam-server:
+        condition: service_healthy
+    command:
+      - bkg-beam-router
+      - --listen
+      - 0.0.0.0:${BEAM_ROUTER_SSH_PORT:-2222}
+      - --server
+      - beam-server:8080
+      - --tunnel-id
+      - ${BEAM_ROUTER_SSH_TUNNEL_ID:-22-me_up-22}
+    ports:
+      - "${BEAM_ROUTER_SSH_BIND:-2222}:${BEAM_ROUTER_SSH_PORT:-2222}"
