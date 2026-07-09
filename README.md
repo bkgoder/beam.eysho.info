@@ -24,7 +24,7 @@ Dieses Repo enthält jetzt nur den Beam-Core:
 Die WebUIs liegen absichtlich in eigenen Repos:
 
 - `bkgoder/admin.beam.eysho.info` für das Admin-Dashboard
-- `bkgoder/webui.beam.eysho.info` für das User-Dashboard
+- `bkgoder/public.beam.eysho.info` für das Public/User-Dashboard
 
 Wichtig: Ein normaler SSH-Client sendet keine Subdomain als erste TCP-Zeile. Für rohes SSH ist deshalb aktuell statisches Port-Mapping der robuste Weg, zum Beispiel Public-Port `2222` auf Tunnel `22-me_up-22`.
 
@@ -121,9 +121,9 @@ Admin-Dashboard:
 
 `https://github.com/bkgoder/admin.beam.eysho.info`
 
-User-Dashboard:
+Public/User-Dashboard:
 
-`https://github.com/bkgoder/webui.beam.eysho.info`
+`https://github.com/bkgoder/public.beam.eysho.info`
 
 ## Protokoll
 
@@ -164,7 +164,7 @@ Danach bridged der Server die Pending-Verbindung mit dem Worker. Der Client brid
 
 1. Persistenz für User, Lizenzen und API-Keys ergänzen.
 2. Auth-Token für `REGISTER`, `CONNECT`, `WORKER` und Admin/User-API einführen.
-3. Live-Fetching in den externen Admin/User-WebUIs verdrahten.
+3. Live-Fetching in den externen Admin/Public-WebUIs verdrahten.
 4. Host-/SNI-Router für `*.beam.eysho.info` ergänzen.
 5. Heartbeats und automatische Cleanup-Logik ergänzen.
 6. Integrationstest mit Echo-Server hinzufügen.
