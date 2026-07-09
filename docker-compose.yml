@@ -41,3 +41,53 @@ services:
       - ${BEAM_ROUTER_SSH_TUNNEL_ID:-22-me_up-22}
     ports:
       - "${BEAM_ROUTER_SSH_BIND:-2222}:${BEAM_ROUTER_SSH_PORT:-2222}"
+
+  beam-admin-ui:
+    image: node:22-bookworm-slim
+    container_name: beam-admin-ui
+    restart: unless-stopped
+    working_dir: /app
+    environment:
+      BEAM_API_BASE: ${BEAM_API_BASE:-http://beam-server:8081}
+    command:
+      - sh
+      - -lc
+      - |
+        apt-get update \
+          && apt-get install -y --no-install-recommends git curl ca-certificates pkg-config libssl-dev build-essential \
+          && rm -rf /var/lib/apt/lists/* \
+          && git clone --depth 1 https://github.com/bkgoder/admin.beam.eysho.info.git . \
+          && curl https://sh.rustup.rs -sSf | sh -s -- -y \
+          && . /root/.cargo/env \
+          && cargo install dioxus-cli --version 0.7.9 --locked \
+          && dx serve --addr 0.0.0.0 --port ${BEAM_ADMIN_UI_PORT:-3001}
+    depends_on:
+      beam-server:
+        condition: service_healthy
+    ports:
+      - "${BEAM_ADMIN_UI_BIND:-3001}:${BEAM_ADMIN_UI_PORT:-3001}"
+
+  beam-public-ui:
+    image: node:22-bookworm-slim
+    container_name: beam-public-ui
+    restart: unless-stopped
+    working_dir: /app
+    environment:
+      BEAM_API_BASE: ${BEAM_API_BASE:-http://beam-server:8081}
+    command:
+      - sh
+      - -lc
+      - |
+        apt-get update \
+          && apt-get install -y --no-install-recommends git curl ca-certificates pkg-config libssl-dev build-essential \
+          && rm -rf /var/lib/apt/lists/* \
+          && git clone --depth 1 https://github.com/bkgoder/public.beam.eysho.info.git . \
+          && curl https://sh.rustup.rs -sSf | sh -s -- -y \
+          && . /root/.cargo/env \
+          && cargo install dioxus-cli --version 0.7.9 --locked \
+          && dx serve --addr 0.0.0.0 --port ${BEAM_PUBLIC_UI_PORT:-3000}
+    depends_on:
+      beam-server:
+        condition: service_healthy
+    ports:
+      - "${BEAM_PUBLIC_UI_BIND:-3000}:${BEAM_PUBLIC_UI_PORT:-3000}"
