@@ -17,13 +17,13 @@ Dieses Repo enthält jetzt nur den Beam-Core:
 
 - `bkg-beam` als Client
 - `bkg-beam-server` als Control-/Tunnel-Server
-- `bkg-beam-router` als statischen TCP-Port-Router
 - User-/Admin-API-Flächen für Lizenzen, API-Keys, Tunnels und Router-Mappings
 - Dockerfile und Docker Compose Stack
-- zwei WebUI-Sidecars für Admin und Public/User UI
+- Compose-Sidecars für Router, Admin UI und Public/User UI
 
-Die WebUIs liegen absichtlich in eigenen Repos:
+Die Sidecars liegen absichtlich in eigenen Repos:
 
+- `bkgoder/router.beam.eysho.info` für den Router-Sidecar
 - `bkgoder/admin.beam.eysho.info` für das Admin-Dashboard
 - `bkgoder/public.beam.eysho.info` für das Public/User-Dashboard
 
@@ -33,11 +33,17 @@ Wichtig: Ein normaler SSH-Client sendet keine Subdomain als erste TCP-Zeile. Fü
 
 - `src/client` enthält den Tunnel-Client
 - `src/server` enthält den Beam-Control-Server plus Admin/User-API
-- `src/router` enthält den statischen TCP-Router
-- `docker-compose.yml` startet Server, Router und WebUI-Sidecars
+- `docker-compose.yml` startet Server plus Router/Admin/Public-Sidecars
 - `docs/deploy-compose.md` beschreibt den Compose-Betrieb
 
 ## Docker Compose starten
+
+Die Standard-Annahme ist, dass diese Repos nebeneinander liegen:
+
+- `beam.eysho.info`
+- `router.beam.eysho.info`
+- `admin.beam.eysho.info`
+- `public.beam.eysho.info`
 
 `.env.example` nach `.env` kopieren und bei Bedarf anpassen.
 
@@ -78,8 +84,6 @@ Einzeln bauen:
 
 `cargo build -p bkg-beam-server`
 
-`cargo build -p bkg-beam-router`
-
 ## Server starten
 
 `RUST_LOG=info cargo run -p bkg-beam-server -- --port 8080 --admin-port 8081`
@@ -117,13 +121,19 @@ Lokalen Host ändern:
 
 `RUST_LOG=info cargo run -p bkg-beam -- 3000:me up:3000 --local-host 127.0.0.1 --server beam.eysho.info --server-port 8080`
 
-## Router starten
+## Router
 
-Beispiel: öffentlicher Port `2222` wird auf Tunnel `22-me_up-22` geroutet:
+Der Router liegt nicht mehr im Core-Workspace. Er wird als Sidecar aus dem externen Repo gebaut:
 
-`RUST_LOG=info cargo run -p bkg-beam-router -- --listen 0.0.0.0:2222 --server 127.0.0.1:8080 --tunnel-id 22-me_up-22`
+`https://github.com/bkgoder/router.beam.eysho.info`
 
-Danach kann ein Client den öffentlichen Port ansprechen, während `bkg-beam-router` intern `CONNECT 22-me_up-22` an den Beam-Server sendet.
+Der Compose-Service `beam-router-ssh` verwendet standardmäßig:
+
+- Build-Kontext: `../router.beam.eysho.info`
+- Image: `router-beam-eysho-info:local`
+- Listen-Port: `2222`
+- Beam-Server: `beam-server:8080`
+- Tunnel-ID: `22-me_up-22`
 
 ## WebUIs
 
@@ -172,7 +182,7 @@ Danach bridged der Server die Pending-Verbindung mit dem Worker. Der Client brid
 
 ## Nächste sinnvolle Schritte
 
-1. Feste WebUI-Images für Admin/Public bauen.
+1. Feste Images für Router/Admin/Public bauen.
 2. Persistenz für User, Lizenzen und API-Keys ergänzen.
 3. Auth-Token für `REGISTER`, `CONNECT`, `WORKER` und Admin/User-API einführen.
 4. Live-Fetching in den externen Admin/Public-WebUIs verdrahten.
