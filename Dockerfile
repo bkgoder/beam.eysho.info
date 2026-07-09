@@ -1,7 +1,7 @@
 FROM rust:1.83-bookworm AS builder
 WORKDIR /app
 COPY . .
-RUN cargo build --release --workspace --exclude bkg-beam-admin-ui
+RUN cargo build --release --workspace
 
 FROM debian:bookworm-slim AS runtime
 RUN apt-get update \
