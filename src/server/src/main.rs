@@ -1,12 +1,14 @@
+use axum::{extract::State, routing::get, Json, Router};
 use clap::Parser;
 use log::{error, info, warn};
+use serde::Serialize;
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use tokio::io::{copy_bidirectional, AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{mpsc, Mutex};
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 #[command(name = "bkg-beam-server")]
 #[command(version = "0.1.0")]
 struct Args {
@@ -15,6 +17,9 @@ struct Args {
 
     #[arg(short, long, default_value_t = 8080)]
     port: u16,
+
+    #[arg(long, default_value_t = 8081)]
+    admin_port: u16,
 }
 
 #[derive(Clone)]
@@ -28,6 +33,28 @@ struct TunnelEntry {
     workers: VecDeque<TcpStream>,
 }
 
+#[derive(Clone)]
+struct AdminState {
+    domain: String,
+    control_port: u16,
+    state: TunnelState,
+}
+
+#[derive(Serialize)]
+struct HealthResponse {
+    status: &'static str,
+    domain: String,
+    control_port: u16,
+    tunnel_count: usize,
+}
+
+#[derive(Serialize)]
+struct TunnelSnapshot {
+    tunnel_id: String,
+    pending_connections: usize,
+    worker_connections: usize,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
@@ -37,7 +64,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tunnels: Arc::new(Mutex::new(HashMap::new())),
     };
 
-    info!("Beam server starting on 0.0.0.0:{} for {}", args.port, args.domain);
+    spawn_admin_api(args.clone(), state.clone());
+
+    info!(
+        "Beam server starting on 0.0.0.0:{} for {}",
+        args.port, args.domain
+    );
 
     let listener = TcpListener::bind(format!("0.0.0.0:{}", args.port)).await?;
 
@@ -51,6 +83,56 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         });
     }
+}
+
+fn spawn_admin_api(args: Args, state: TunnelState) {
+    tokio::spawn(async move {
+        let admin_state = AdminState {
+            domain: args.domain.clone(),
+            control_port: args.port,
+            state,
+        };
+
+        let app = Router::new()
+            .route("/health", get(health))
+            .route("/api/tunnels", get(list_tunnels))
+            .with_state(admin_state);
+
+        let addr = format!("0.0.0.0:{}", args.admin_port);
+        match TcpListener::bind(&addr).await {
+            Ok(listener) => {
+                info!("Beam admin API listening on {addr}");
+                if let Err(err) = axum::serve(listener, app).await {
+                    error!("Admin API failed: {err}");
+                }
+            }
+            Err(err) => error!("Failed to bind admin API on {addr}: {err}"),
+        }
+    });
+}
+
+async fn health(State(admin): State<AdminState>) -> Json<HealthResponse> {
+    let tunnels = admin.state.tunnels.lock().await;
+    Json(HealthResponse {
+        status: "ok",
+        domain: admin.domain,
+        control_port: admin.control_port,
+        tunnel_count: tunnels.len(),
+    })
+}
+
+async fn list_tunnels(State(admin): State<AdminState>) -> Json<Vec<TunnelSnapshot>> {
+    let tunnels = admin.state.tunnels.lock().await;
+    let snapshots = tunnels
+        .iter()
+        .map(|(tunnel_id, entry)| TunnelSnapshot {
+            tunnel_id: tunnel_id.clone(),
+            pending_connections: entry.pending.len(),
+            worker_connections: entry.workers.len(),
+        })
+        .collect();
+
+    Json(snapshots)
 }
 
 async fn handle_connection(
@@ -100,7 +182,9 @@ async fn register_tunnel(
     {
         let mut tunnels = state.tunnels.lock().await;
         if tunnels.contains_key(&tunnel_id) {
-            control_stream.write_all(b"ERROR tunnel already exists\n").await?;
+            control_stream
+                .write_all(b"ERROR tunnel already exists\n")
+                .await?;
             return Ok(());
         }
 
