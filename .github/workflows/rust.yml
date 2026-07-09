@@ -1,0 +1,23 @@
+name: Rust
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cargo check
+        run: cargo check --workspace --all-targets
+
+      - name: Cargo fmt check
+        run: cargo fmt --all -- --check
