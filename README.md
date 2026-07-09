@@ -20,6 +20,7 @@ Dieses Repo enthält jetzt nur den Beam-Core:
 - `bkg-beam-router` als statischen TCP-Port-Router
 - User-/Admin-API-Flächen für Lizenzen, API-Keys, Tunnels und Router-Mappings
 - Dockerfile und Docker Compose Stack
+- zwei WebUI-Sidecars für Admin und Public/User UI
 
 Die WebUIs liegen absichtlich in eigenen Repos:
 
@@ -33,7 +34,7 @@ Wichtig: Ein normaler SSH-Client sendet keine Subdomain als erste TCP-Zeile. Fü
 - `src/client` enthält den Tunnel-Client
 - `src/server` enthält den Beam-Control-Server plus Admin/User-API
 - `src/router` enthält den statischen TCP-Router
-- `docker-compose.yml` startet Server und Router
+- `docker-compose.yml` startet Server, Router und WebUI-Sidecars
 - `docs/deploy-compose.md` beschreibt den Compose-Betrieb
 
 ## Docker Compose starten
@@ -52,9 +53,18 @@ Logs prüfen:
 
 `docker compose logs -f beam-router-ssh`
 
+`docker compose logs -f beam-admin-ui`
+
+`docker compose logs -f beam-public-ui`
+
 Healthcheck:
 
 `curl http://127.0.0.1:8081/health`
+
+Lokale WebUIs:
+
+- Public/User UI: `http://127.0.0.1:3000`
+- Admin UI: `http://127.0.0.1:3001`
 
 ## Bauen
 
@@ -157,15 +167,16 @@ Danach bridged der Server die Pending-Verbindung mit dem Worker. Der Client brid
 - Keine Heartbeats/Keepalive-Logik.
 - Keine Limits gegen Tunnel-Spam.
 - Host-/SNI-Routing für Subdomains ist noch nicht implementiert.
-- Compose startet aktuell Server und einen statischen SSH-Router.
+- WebUI-Sidecars installieren im aktuellen Schnitt `dioxus-cli` beim Containerstart; feste Images sind der nächste saubere Schritt.
 - Kein systemd-Service.
 
 ## Nächste sinnvolle Schritte
 
-1. Persistenz für User, Lizenzen und API-Keys ergänzen.
-2. Auth-Token für `REGISTER`, `CONNECT`, `WORKER` und Admin/User-API einführen.
-3. Live-Fetching in den externen Admin/Public-WebUIs verdrahten.
-4. Host-/SNI-Router für `*.beam.eysho.info` ergänzen.
-5. Heartbeats und automatische Cleanup-Logik ergänzen.
-6. Integrationstest mit Echo-Server hinzufügen.
-7. Release-Build und systemd-Units ergänzen.
+1. Feste WebUI-Images für Admin/Public bauen.
+2. Persistenz für User, Lizenzen und API-Keys ergänzen.
+3. Auth-Token für `REGISTER`, `CONNECT`, `WORKER` und Admin/User-API einführen.
+4. Live-Fetching in den externen Admin/Public-WebUIs verdrahten.
+5. Host-/SNI-Router für `*.beam.eysho.info` ergänzen.
+6. Heartbeats und automatische Cleanup-Logik ergänzen.
+7. Integrationstest mit Echo-Server hinzufügen.
+8. Release-Build und systemd-Units ergänzen.
