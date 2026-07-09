@@ -1,5 +1,5 @@
 [application]
-name = "bkg-beam-admin-ui"
+name = "bkg-beam-admin-webui"
 default_platform = "web"
 
 [web.app]
