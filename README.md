@@ -18,8 +18,9 @@ Dieses Repo enthält jetzt:
 - `bkg-beam` als Client
 - `bkg-beam-server` als Control-/Tunnel-Server
 - `bkg-beam-router` als statischen TCP-Port-Router
-- eine erste Dioxus-Web-Admin-UI unter `src/admin-ui`
-- eine Admin-HTTP-API am Server
+- `webui/admin` als Admin-Dashboard
+- `webui/users` als User-Dashboard
+- User-/Admin-API-Flächen für Lizenzen, API-Keys, Tunnels und Router-Mappings
 - Dockerfile und Docker Compose Stack
 
 Wichtig: Ein normaler SSH-Client sendet keine Subdomain als erste TCP-Zeile. Für rohes SSH ist deshalb aktuell statisches Port-Mapping der robuste Weg, zum Beispiel Public-Port `2222` auf Tunnel `22-me_up-22`.
@@ -27,9 +28,10 @@ Wichtig: Ein normaler SSH-Client sendet keine Subdomain als erste TCP-Zeile. Fü
 ## Struktur
 
 - `src/client` enthält den Tunnel-Client
-- `src/server` enthält den Beam-Control-Server plus Admin-API
+- `src/server` enthält den Beam-Control-Server plus Admin/User-API
 - `src/router` enthält den statischen TCP-Router
-- `src/admin-ui` enthält das Dioxus-Web-Admin-Gerüst
+- `webui/admin` enthält das Admin-Dashboard
+- `webui/users` enthält das User-Dashboard
 - `docker-compose.yml` startet Server und Router
 - `docs/deploy-compose.md` beschreibt den Compose-Betrieb
 
@@ -73,12 +75,26 @@ Einzeln bauen:
 
 Der Control-Server lauscht standardmäßig auf `0.0.0.0:8080`.
 
-Die Admin-API lauscht standardmäßig auf `0.0.0.0:8081`.
+Die Admin/User-API lauscht standardmäßig auf `0.0.0.0:8081`.
 
-Admin-Endpunkte:
+Basis-Endpunkte:
 
 - `/health`
 - `/api/tunnels`
+
+User-Endpunkte:
+
+- `POST /api/users/api-keys`
+- `GET /api/users/:user_id/api-keys`
+- `GET /api/users/:user_id/tunnels`
+
+Admin-Endpunkte:
+
+- `GET /api/admin/overview`
+- `GET /api/admin/users`
+- `GET /api/admin/api-keys`
+- `GET /api/admin/tunnels`
+- `GET /api/admin/router-mappings`
 
 ## Client starten
 
@@ -98,17 +114,21 @@ Beispiel: öffentlicher Port `2222` wird auf Tunnel `22-me_up-22` geroutet:
 
 Danach kann ein Client den öffentlichen Port ansprechen, während `bkg-beam-router` intern `CONNECT 22-me_up-22` an den Beam-Server sendet.
 
-## Admin UI starten
+## WebUI starten
 
-Die Admin-UI liegt bewusst außerhalb des Root-Workspace-CI, weil Dioxus-Web-Builds Browser/WASM-Ziele verwenden.
+Admin-Dashboard:
 
-Start aus dem UI-Verzeichnis:
-
-`cd src/admin-ui`
+`cd webui/admin`
 
 `dx serve`
 
-Die erste UI ist ein Dashboard-Gerüst. Der Server liefert bereits `/health` und `/api/tunnels`. Live-Fetching wird im nächsten Schnitt verdrahtet.
+User-Dashboard:
+
+`cd webui/users`
+
+`dx serve`
+
+Die Dashboards liegen bewusst außerhalb des Root-Workspace-CI, weil Dioxus-Web-Builds Browser/WASM-Ziele verwenden.
 
 ## Protokoll
 
@@ -136,20 +156,22 @@ Danach bridged der Server die Pending-Verbindung mit dem Worker. Der Client brid
 
 ## Bekannte Grenzen
 
-- Authentifizierung fehlt noch.
+- Authentifizierung ist noch nicht hart verdrahtet.
+- API-Key- und Lizenzdaten liegen aktuell im Speicher und sind noch nicht persistent.
 - TLS fehlt noch.
 - Keine Heartbeats/Keepalive-Logik.
 - Keine Limits gegen Tunnel-Spam.
 - Host-/SNI-Routing für Subdomains ist noch nicht implementiert.
-- Admin-UI hat aktuell noch statische Beispielwerte.
+- Dashboards haben erste Oberflächen und API-Zielpunkte, Live-Fetching kommt als nächster Schnitt.
 - Compose startet aktuell Server und einen statischen SSH-Router.
 - Kein systemd-Service.
 
 ## Nächste sinnvolle Schritte
 
-1. Live-Fetching in der Dioxus-UI gegen `/health` und `/api/tunnels` verdrahten.
-2. Auth-Token für `REGISTER`, `CONNECT`, `WORKER` und Admin-API einführen.
-3. Host-/SNI-Router für `*.beam.eysho.info` ergänzen.
-4. Heartbeats und automatische Cleanup-Logik ergänzen.
-5. Integrationstest mit Echo-Server hinzufügen.
-6. Release-Build und systemd-Units ergänzen.
+1. Live-Fetching in Admin/User-Dashboard gegen die neuen API-Flächen verdrahten.
+2. Persistenz für User, Lizenzen und API-Keys ergänzen.
+3. Auth-Token für `REGISTER`, `CONNECT`, `WORKER` und Admin/User-API einführen.
+4. Host-/SNI-Router für `*.beam.eysho.info` ergänzen.
+5. Heartbeats und automatische Cleanup-Logik ergänzen.
+6. Integrationstest mit Echo-Server hinzufügen.
+7. Release-Build und systemd-Units ergänzen.
