@@ -25,14 +25,16 @@ services:
       start_period: 10s
 
   beam-router-ssh:
-    image: bkg-beam:local
+    build:
+      context: ${BEAM_ROUTER_CONTEXT:-../router.beam.eysho.info}
+      dockerfile: Dockerfile
+    image: ${BEAM_ROUTER_IMAGE:-router-beam-eysho-info:local}
     container_name: beam-router-ssh
     restart: unless-stopped
     depends_on:
       beam-server:
         condition: service_healthy
     command:
-      - bkg-beam-router
       - --listen
       - 0.0.0.0:${BEAM_ROUTER_SSH_PORT:-2222}
       - --server
